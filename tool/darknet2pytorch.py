@@ -6,7 +6,6 @@ from tool.yolo_layer import YoloLayer
 from tool.config import *
 from tool.torch_utils import *
 
-
 class Mish(torch.nn.Module):
     def __init__(self):
         super().__init__()
@@ -520,3 +519,120 @@ class Darknet(nn.Module):
     #         else:
     #             print('unknown type %s' % (block['type']))
     #     fp.close()
+
+
+# Some testing code
+def get_args():
+    import argparse
+
+    parser = argparse.ArgumentParser('Test your image or video by trained model.')
+    parser.add_argument('-cfgfile', type=str, default='../cfg/yolov4.cfg',
+                        help='path of cfg file', dest='cfgfile')
+    parser.add_argument('-weightfile', type=str,
+                        default='../weights/darknet/yolov4.weights',
+                        help='path of darknet weight file.', dest='weightfile')
+    parser.add_argument('-imgfile', type=str,
+                        default='../data/dog.jpg',
+                        help='path of your image file.', dest='imgfile')
+    args = parser.parse_args()
+
+    return args
+
+if __name__ == '__main__':
+    import cv2
+    from tool.utils import load_class_names, plot_boxes_cv2, post_processing
+    from torchsummary import summary
+    # from torch.utils.tensorboard import SummaryWriter
+    from torchviz import make_dot, make_dot_wshape
+
+    torch.set_default_tensor_type('torch.cuda.FloatTensor')
+
+    use_cuda = True
+    args = get_args()
+
+    net = Darknet(args.cfgfile)
+    net.print_network()
+    net.load_weights(args.weightfile)
+    print('Loading weights from %s... Done!' % (args.weightfile))
+
+    # GPU
+    if use_cuda == True:
+        net = net.cuda()
+
+    num_classes = net.num_classes
+    if num_classes == 20:
+        namesfile = '../data/voc.names'
+    elif num_classes == 80:
+        namesfile = '../data/coco.names'
+    else:
+        namesfile = '../data/x.names'
+    class_names = load_class_names(namesfile)
+
+    img = cv2.imread(args.imgfile)
+    sized = cv2.resize(img, (net.width, net.height))
+    sized = cv2.cvtColor(sized, cv2.COLOR_BGR2RGB)
+
+    net.eval()
+    t0 = time.time()
+
+    if type(sized) == np.ndarray and len(sized.shape) == 3:  # cv2 image
+        sized = torch.from_numpy(sized.transpose(2, 0, 1)).float().div(255.0).unsqueeze(0)
+    elif type(sized) == np.ndarray and len(sized.shape) == 4:
+        sized = torch.from_numpy(sized.transpose(0, 3, 1, 2)).float().div(255.0)
+    else:
+        print("unknow image type")
+        exit(-1)
+
+    if use_cuda:
+        sized = sized.cuda()
+    sized = torch.autograd.Variable(sized)
+
+    t1 = time.time()
+    output = net(sized)
+    t2 = time.time()
+    boxes = post_processing(sized, 0.4, 0.6, output)
+    t3 = time.time()
+
+    print('-----------------------------------')
+    print('           Preprocess : %f' % (t1 - t0))
+    print('      Model Inference : %f' % (t2 - t1))
+    print('          Postprocess : %f' % (t3 - t2))
+    print('-----------------------------------')
+
+    plot_boxes_cv2(img, boxes[0], savename='../data/predictions.jpg', class_names=class_names)
+
+    if not os.path.exists('../modelgraph'):
+        os.makedirs('../modelgraph')
+
+    print(output.shape)
+    # Draw final output graph
+    # make_dot(output).render("../modelgraph/combinedGraph", format="png")
+    summary(net, input_size=(3, net.height, net.width))  # CHW
+    # make_dot_wshape(net, sized).render("../modelgraph/combinedGraphwShape", format="png")
+
+
+    # writer = SummaryWriter('../modelgraph/tensorboard_graph')
+    # writer.add_graph(net, sized)
+    # writer.close()
+
+    # for p in net.prediction_layers:
+    #     print(p.last_conv_size)
+    #
+    # print()
+    # for k, a in y.items():
+    #     print(k + ': ', a.size(), torch.sum(a))
+    # exit()
+
+    # timer.disable('pass2')
+    # avg = MovingAverage()
+    # try:
+    #     while True:
+    #         timer.reset()
+    #         with timer.env('everything else'):
+    #             net(x)
+    #         avg.add(timer.total_time())
+    #         print('\033[2J')  # Moves console cursor to 0,0
+    #         timer.print_stats()
+    #         print('Avg fps: %.2f\tAvg ms: %.2f         ' % (1 / avg.get_avg(), avg.get_avg() * 1000))
+    # except KeyboardInterrupt:
+    #     pass
