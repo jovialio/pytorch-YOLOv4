@@ -15,6 +15,7 @@ import sys
 import time
 from collections import defaultdict
 
+import cv2
 import numpy as np
 import torch
 from PIL import Image, ImageDraw
@@ -24,7 +25,7 @@ from pycocotools.cocoeval import COCOeval
 
 from cfg import Cfg
 from tool.darknet2pytorch import Darknet
-from tool.utils import load_class_names
+from tool.utils import load_class_names, plot_boxes_cv2
 from tool.torch_utils import do_detect
 
 
@@ -142,7 +143,7 @@ def evaluate_on_coco(cfg, resFile):
                 label = get_class_name(cls_id)
                 draw.text((x1_truth, y1_truth), label, fill=rgb_label)
                 draw.rectangle([x1_truth, y1_truth, x2_truth, y2_truth], outline=rgb_label)
-            actual_image.save("./data/outcome/predictions_{}".format(gt_annotation_image_raw[0]["file_name"]))
+            actual_image.save("./data/coco_results/predictions_{}".format(gt_annotation_image_raw[0]["file_name"]))
         else:
             print('please check')
             break
@@ -170,9 +171,13 @@ def test(model, annotations, cfg):
     else:
         use_cuda = 0
 
+    if use_cuda:
+        model.cuda()
+
     # do one forward pass first to circumvent cold start
     throwaway_image = Image.open('data/dog.jpg').convert('RGB').resize((model.width, model.height))
-    do_detect(model, throwaway_image, 0.5, 80, 0.4, use_cuda)
+    throwaway_image = np.array(throwaway_image)
+    do_detect(model, throwaway_image, 0.25, 0.5, use_cuda) #conf_thresh, nms_thresh
     boxes_json = []
 
     for i, image_annotation in enumerate(images):
@@ -185,12 +190,11 @@ def test(model, annotations, cfg):
         # open and resize each image first
         img = Image.open(os.path.join(cfg.dataset_dir, image_file_name)).convert('RGB')
         sized = img.resize((model.width, model.height))
-
-        if use_cuda:
-            model.cuda()
+        sized = np.array(sized)
 
         start = time.time()
-        boxes = do_detect(model, sized, 0.0, 80, 0.4, use_cuda)
+        boxes = do_detect(model, sized, 0.25, 0.5, use_cuda)
+        boxes = boxes[0]
         finish = time.time()
         if type(boxes) == list:
             for box in boxes:
@@ -215,21 +219,20 @@ def test(model, annotations, cfg):
                 box_json["timing"] = float(finish - start)
                 boxes_json.append(box_json)
                 # print("see box_json: ", box_json)
-                with open(resFile, 'w') as outfile:
-                    json.dump(boxes_json, outfile, default=myconverter)
+                # with open(resFile, 'w') as outfile:
+                #     json.dump(boxes_json, outfile, default=myconverter)
         else:
             print("warning: output from model after postprocessing is not a list, ignoring")
             return
 
         # namesfile = 'data/coco.names'
         # class_names = load_class_names(namesfile)
-        # plot_boxes(img, boxes, 'data/outcome/predictions_{}.jpg'.format(image_id), class_names)
+        # plot_boxes_cv2(cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR), boxes, savename='data/coco_results/predictions_{}.jpg'.format(image_id), class_names=class_names)
 
     with open(resFile, 'w') as outfile:
         json.dump(boxes_json, outfile, default=myconverter)
 
     evaluate_on_coco(cfg, resFile)
-
 
 def get_args(**kwargs):
     cfg = kwargs
@@ -243,7 +246,7 @@ def get_args(**kwargs):
                         help='dataset dir', dest='dataset_dir')
     parser.add_argument('-gta', '--ground_truth_annotations', type=str, default='instances_val2017.json',
                         help='ground truth annotations file', dest='gt_annotations_path')
-    parser.add_argument('-w', '--weights_file', type=str, default='weights/yolov4.weights',
+    parser.add_argument('-w', '--weights_file', type=str, default='weights/darknet/yolov4.weights',
                         help='weights file to load', dest='weights_file')
     parser.add_argument('-c', '--model_config', type=str, default='cfg/yolov4.cfg',
                         help='model config file to load', dest='model_config')
