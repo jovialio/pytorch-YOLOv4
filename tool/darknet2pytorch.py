@@ -470,55 +470,56 @@ class Darknet(nn.Module):
             else:
                 print('unknown type %s' % (block['type']))
 
-    # def save_weights(self, outfile, cutoff=0):
-    #     if cutoff <= 0:
-    #         cutoff = len(self.blocks) - 1
-    #
-    #     fp = open(outfile, 'wb')
-    #     self.header[3] = self.seen
-    #     header = self.header
-    #     header.numpy().tofile(fp)
-    #
-    #     ind = -1
-    #     for blockId in range(1, cutoff + 1):
-    #         ind = ind + 1
-    #         block = self.blocks[blockId]
-    #         if block['type'] == 'convolutional':
-    #             model = self.models[ind]
-    #             batch_normalize = int(block['batch_normalize'])
-    #             if batch_normalize:
-    #                 save_conv_bn(fp, model[0], model[1])
-    #             else:
-    #                 save_conv(fp, model[0])
-    #         elif block['type'] == 'connected':
-    #             model = self.models[ind]
-    #             if block['activation'] != 'linear':
-    #                 save_fc(fc, model)
-    #             else:
-    #                 save_fc(fc, model[0])
-    #         elif block['type'] == 'maxpool':
-    #             pass
-    #         elif block['type'] == 'reorg':
-    #             pass
-    #         elif block['type'] == 'upsample':
-    #             pass
-    #         elif block['type'] == 'route':
-    #             pass
-    #         elif block['type'] == 'shortcut':
-    #             pass
-    #         elif block['type'] == 'region':
-    #             pass
-    #         elif block['type'] == 'yolo':
-    #             pass
-    #         elif block['type'] == 'avgpool':
-    #             pass
-    #         elif block['type'] == 'softmax':
-    #             pass
-    #         elif block['type'] == 'cost':
-    #             pass
-    #         else:
-    #             print('unknown type %s' % (block['type']))
-    #     fp.close()
+    def save_weights(self, outfile, cutoff=0):
+        if cutoff <= 0:
+            cutoff = len(self.blocks) - 1
+
+        fp = open(outfile, 'wb')
+        self.header[3] = self.seen
+        header = self.header
+        header.numpy().tofile(fp)
+
+        ind = -1
+        for blockId in range(1, cutoff + 1):
+            ind = ind + 1
+            block = self.blocks[blockId]
+            print(ind, block['type'])
+            if block['type'] == 'convolutional':
+                model = self.models[ind]
+                batch_normalize = int(block['batch_normalize'])
+                if batch_normalize:
+                    save_conv_bn(fp, model[0], model[1])
+                else:
+                    save_conv(fp, model[0])
+            elif block['type'] == 'connected':
+                model = self.models[ind]
+                if block['activation'] != 'linear':
+                    save_fc(fc, model)
+                else:
+                    save_fc(fc, model[0])
+            elif block['type'] == 'maxpool':
+                pass
+            elif block['type'] == 'reorg':
+                pass
+            elif block['type'] == 'upsample':
+                pass
+            elif block['type'] == 'route':
+                pass
+            elif block['type'] == 'shortcut':
+                pass
+            elif block['type'] == 'region':
+                pass
+            elif block['type'] == 'yolo':
+                pass
+            elif block['type'] == 'avgpool':
+                pass
+            elif block['type'] == 'softmax':
+                pass
+            elif block['type'] == 'cost':
+                pass
+            else:
+                print('unknown type %s' % (block['type']))
+        fp.close()
 
 
 # Some testing code
@@ -608,31 +609,13 @@ if __name__ == '__main__':
     # Draw final output graph
     # make_dot(output).render("../modelgraph/combinedGraph", format="png")
     summary(net, input_size=(3, net.height, net.width))  # CHW
-    # make_dot_wshape(net, sized).render("../modelgraph/combinedGraphwShape", format="png")
+    net.train()
+    make_dot_wshape(net, sized).render("../modelgraph/combinedGraphwShape", format="png")
 
-
+    # Tensorboard
     # writer = SummaryWriter('../modelgraph/tensorboard_graph')
     # writer.add_graph(net, sized)
     # writer.close()
 
-    # for p in net.prediction_layers:
-    #     print(p.last_conv_size)
-    #
-    # print()
-    # for k, a in y.items():
-    #     print(k + ': ', a.size(), torch.sum(a))
-    # exit()
+    net.save_weights('../weights/darknet/yolov4.conv.137.pth', cutoff=137)
 
-    # timer.disable('pass2')
-    # avg = MovingAverage()
-    # try:
-    #     while True:
-    #         timer.reset()
-    #         with timer.env('everything else'):
-    #             net(x)
-    #         avg.add(timer.total_time())
-    #         print('\033[2J')  # Moves console cursor to 0,0
-    #         timer.print_stats()
-    #         print('Avg fps: %.2f\tAvg ms: %.2f         ' % (1 / avg.get_avg(), avg.get_avg() * 1000))
-    # except KeyboardInterrupt:
-    #     pass
