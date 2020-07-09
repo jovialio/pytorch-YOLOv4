@@ -605,17 +605,18 @@ if __name__ == '__main__':
     if not os.path.exists('../modelgraph'):
         os.makedirs('../modelgraph')
 
-    print(output.shape)
     # Draw final output graph
     # make_dot(output).render("../modelgraph/combinedGraph", format="png")
-    summary(net, input_size=(3, net.height, net.width))  # CHW
-    net.train()
-    make_dot_wshape(net, sized).render("../modelgraph/combinedGraphwShape", format="png")
+    # summary(net, input_size=(3, net.height, net.width))  # CHW
+    # net.train()
+    # make_dot_wshape(net, sized).render("../modelgraph/combinedGraphwShape", format="png")
 
-    # Tensorboard
+    net.save_weights('../weights/darknet/yolov4.conv.137.pth', cutoff=137)
+
+    # TODO: Tensorboard not working
     # writer = SummaryWriter('../modelgraph/tensorboard_graph')
     # writer.add_graph(net, sized)
     # writer.close()
 
-    net.save_weights('../weights/darknet/yolov4.conv.137.pth', cutoff=137)
+
 
